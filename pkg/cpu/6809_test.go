@@ -32,7 +32,7 @@ func TestResetCPU(t *testing.T) {
 	memory := &Memory{}
 	cpu := Build(memory)
 
-	cpuState := cpu.getState()
+	cpuState := cpu.GetState()
 	if cpuState.regPC != 0xAAAA {
 		t.Errorf("cpuState.regPC is invalid after reset, 0x%X", cpuState.regPC)
 	}

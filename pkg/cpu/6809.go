@@ -73,6 +73,19 @@ func (cpu *CPU) reset() {
 	logger.Debug("exec reset 0x%X", cpu.regPC)
 }
 
+func (cpu *CPU) fetch() uint8 {
+	cpu.regPC++
+	return cpu.read(cpu.regPC)
+}
+
+func (cpu *CPU) fetch16() uint16 {
+	cpu.regPC++
+	v1 := uint16(cpu.read(cpu.regPC))
+	cpu.regPC++
+	v2 := uint16(cpu.read(cpu.regPC))
+	return (v1 << 8) + v2
+}
+
 func (cpu *CPU) write(offset uint16, data uint8) {
 	cpu.memory.write(offset, data)
 }
@@ -92,7 +105,35 @@ func (cpu *CPU) readWord(addr uint16) uint16 {
 	return v1<<8 + v2
 }
 
-func (cpu *CPU) getState() CPU {
+// Step execute next instruction, return executed ticks
+func (cpu *CPU) Step() uint64 {
+	oldTickCount := cpu.tickCount
+
+	if cpu.firqPending {
+		if (cpu.regCC & flagFirqMask) == 0 {
+			cpu.firqPending = false
+			cpu.firqCount++
+			cpu._executeFirq()
+			return cpu.tickCount - oldTickCount
+		}
+		cpu.missedFIRQ++
+	}
+
+	if cpu.irqPending {
+		if (cpu.regCC & flagIrqMask) == 0 {
+			cpu.irqPending = false
+			cpu.irqCount++
+			cpu._executeIrq()
+			return cpu.tickCount - oldTickCount
+		}
+		cpu.missedIRQ++
+	}
+
+	return cpu.RunOpCode()
+}
+
+// GetState returns the internal state of the CPU
+func (cpu *CPU) GetState() CPU {
 	return CPU{
 		tickCount:   cpu.tickCount,
 		irqPending:  cpu.irqPending,
@@ -113,4 +154,36 @@ func (cpu *CPU) getState() CPU {
 		regPC: cpu.regPC,
 		regDP: cpu.regDP,
 	}
+}
+
+func (cpu *CPU) _executeFirq() {
+	// TODO check if CWAI is pending
+	logger.Debug("EXEC_FIRQ, count %d", cpu.tickCount)
+	// clear ENTIRE flag to this.regCC, used for RTI
+	cpu.regCC &= ^flagEntire
+	cpu.PUSHW(cpu.regPC)
+	cpu.PUSHB(cpu.regCC)
+	//Disable interrupts, Set F,I
+	cpu.regCC |= flagIrqMask | flagFirqMask
+	cpu.regPC = cpu.readWord(vectorFirq)
+	cpu.tickCount += 10
+}
+
+func (cpu *CPU) _executeIrq() {
+	// TODO check if CWAI is pending
+	logger.Debug("EXEC_IRQ, count %d", cpu.tickCount)
+	// set ENTIRE flag to this.regCC, used for RTI
+	cpu.regCC |= flagEntire
+	cpu.PUSHW(cpu.regPC)
+	cpu.PUSHW(cpu.regU)
+	cpu.PUSHW(cpu.regY)
+	cpu.PUSHW(cpu.regX)
+	cpu.PUSHB(cpu.regDP)
+	cpu.PUSHB(cpu.regB)
+	cpu.PUSHB(cpu.regA)
+	cpu.PUSHB(cpu.regCC)
+	// Disable interrupts, Set I
+	cpu.regCC |= flagIrqMask
+	cpu.regPC = cpu.readWord(vectorIrq)
+	cpu.tickCount += 19
 }
