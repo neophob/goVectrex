@@ -37,3 +37,26 @@ func TestResetCPU(t *testing.T) {
 		t.Errorf("cpuState.regPC is invalid after reset, 0x%X", cpuState.regPC)
 	}
 }
+
+func TestSignedConvert(t *testing.T) {
+	memory := &Memory{}
+	cpu := Build(memory)
+
+	result := cpu.signed(1)
+	if result != 1 {
+		t.Errorf("cpu.signed(1) should be 1, is %d", result)
+	}
+	result = cpu.signed(255)
+	if result != -1 {
+		t.Errorf("cpu.signed(255) should be -1, is %d", result)
+	}
+	result16 := cpu.signed16(1)
+	if result16 != 1 {
+		t.Errorf("cpu.signed16(1) should be 1, is %d", result16)
+	}
+	result16 = cpu.signed16(0xFFFF)
+	if result16 != -1 {
+		t.Errorf("cpu.signed16(0xFFFF) should be -1, is %d", result16)
+	}
+
+}
